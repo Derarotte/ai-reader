@@ -15,8 +15,8 @@ type ReaderArea struct {
 	container   *fyne.Container
 	
 	// UI组件
-	contentArea *widget.RichText
-	toolbar     *container.Border
+	contentArea *SelectableText
+	toolbar     *fyne.Container
 	pageInfo    *widget.Label
 	prevBtn     *widget.Button
 	nextBtn     *widget.Button
@@ -46,10 +46,8 @@ func NewReaderArea(eventBus *events.Bus) *ReaderArea {
 
 // initializeComponents 初始化组件
 func (ra *ReaderArea) initializeComponents() {
-	// 内容显示区域
-	ra.contentArea = widget.NewRichText()
-	ra.contentArea.Wrapping = fyne.TextWrapWord
-	ra.contentArea.Scroll = container.ScrollBoth
+	// 内容显示区域 - 使用可选择文本组件
+	ra.contentArea = NewSelectableText("欢迎使用AI阅读器！\n\n请打开文档开始阅读。\n\n您可以选择文本进行AI分析。")
 	
 	// 页面信息
 	ra.pageInfo = widget.NewLabel("第 1 页，共 1 页")
@@ -73,7 +71,7 @@ func (ra *ReaderArea) initializeComponents() {
 		zoomInBtn,
 	)
 	
-	ra.toolbar = container.NewBorder(nil, nil, nil, nil, toolbar)
+	ra.toolbar = toolbar
 }
 
 // setupLayout 设置布局
@@ -99,35 +97,37 @@ func (ra *ReaderArea) setupEventHandlers() {
 		ra.loadDocument(filename)
 	})
 	
-	// 监听文本选择事件
-	ra.contentArea.OnSelectionChanged = func(selection *widget.RichTextSelection) {
-		if selection != nil && len(ra.contentArea.String()) > 0 {
-			// 获取选中的文本
-			selectedText := ra.getSelectedText(selection)
-			if selectedText != "" {
-				ra.eventBus.Publish(events.Event{
-					Type:    events.TextSelected,
-					Payload: selectedText,
-				})
-			}
-		}
-	}
+	// 添加文本选择处理 - 使用鼠标事件实现
+	ra.setupTextSelection()
 }
 
 // loadDocument 加载文档
 func (ra *ReaderArea) loadDocument(filename string) {
 	// TODO: 通过文档管理器加载文档
 	// 这里先用占位文本
-	ra.contentArea.ParseMarkdown("# " + filename + "\n\n这是一个示例文档内容。\n\n你可以选择文本进行AI分析。")
+	content := "# " + filename + "\n\n这是一个示例文档内容。\n\n## 主要功能\n\n- 智能文本分析\n- 多种主题切换\n- 丰富的翻页动画\n- 文档格式支持\n\n您可以选择文本进行AI分析，系统会为您提供背景信息和概念解释。"
+	ra.contentArea.SetContent(content)
 	ra.currentPage = 1
 	ra.totalPages = 1
 	ra.updatePageInfo()
 }
 
-// getSelectedText 获取选中的文本
-func (ra *ReaderArea) getSelectedText(selection *widget.RichTextSelection) string {
-	// 简化实现，实际需要根据selection获取确切文本
-	return "selected text" // TODO: 实现真正的文本选择
+// setupTextSelection 设置文本选择功能
+func (ra *ReaderArea) setupTextSelection() {
+	// 设置文本选择回调
+	ra.contentArea.OnSelectionChanged = func(selectedText string) {
+		if selectedText != "" {
+			ra.eventBus.Publish(events.Event{
+				Type:    events.TextSelected,
+				Payload: selectedText,
+			})
+		}
+	}
+}
+
+// getSelectedText 获取当前选中的文本
+func (ra *ReaderArea) getSelectedText() string {
+	return ra.contentArea.GetSelectedText()
 }
 
 // handlePreviousPage 处理上一页
@@ -181,7 +181,7 @@ func (ra *ReaderArea) updatePage() {
 	if ra.currentDoc != nil {
 		content, err := ra.currentDoc.GetPage(ra.currentPage)
 		if err == nil {
-			ra.contentArea.ParseMarkdown(content)
+			ra.contentArea.SetContent(content)
 		}
 	}
 	ra.updatePageInfo()
